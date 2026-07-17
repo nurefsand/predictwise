@@ -59,3 +59,18 @@ def score_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
     df["Recommendation"] = df["Risk Score"].apply(maintenance_recommendation)
 
     return df
+
+
+def get_feature_matrix(raw_df: pd.DataFrame):
+    """
+    Runs the same feature engineering + preprocessing steps used by
+    score_dataframe(), but returns the model-ready feature matrix X
+    instead of enriched predictions.
+
+    Added for dashboard/pages/explainability.py, which needs direct
+    access to the exact matrix fed to the model (for SHAP and feature
+    importance) without re-implementing the
+    create_features -> prepare_data sequence a second time.
+    """
+    df = create_features(raw_df.copy())
+    return prepare_data(df)
