@@ -262,17 +262,19 @@ section[data-testid="stSidebar"] div[role="radiogroup"] label {{
     border-radius: 10px;
     border-left: 3px solid var(--kpi-color, {BLUE});
     padding: 14px 16px;
-    height: 100px;
+    min-height: 84px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.14);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
 }}
 
 .kpi-card:hover{{
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.22);
 }}
 
 .kpi-top-row {{
