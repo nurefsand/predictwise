@@ -1,8 +1,11 @@
 """
-dashboard/pages/explainability.py
+dashboard/views/explainability.py
 
 Explainable AI page: global feature importance, SHAP summary plot,
 per-feature exploration, and per-machine local explanations.
+
+Card sections use dashboard.layout.section() - the shared layout
+system - instead of a page-local chart-card pattern.
 
 Design note on src/explainability.py reuse: this file does not know
 the exact function names inside src/explainability.py (it wasn't
@@ -19,13 +22,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 
 from dashboard.theme import (
     HEALTHY, WARNING, CRITICAL, BLUE,
     TEXT_PRIMARY, TEXT_SECONDARY, BORDER, CARD,
-    page_title, kpi_card, base_plotly_layout, badge_html,
+    page_title, kpi_card, base_plotly_layout,
 )
+from dashboard.layout import section, spacer, card_grid, workflow_strip
 from dashboard.data import load_scored_fleet
 from src.pipeline import get_feature_matrix
 
@@ -167,7 +170,7 @@ def show():
         )
 
     _render_summary_card()
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     model = _load_model()
     _, X_sample = _get_sample_matrix()
@@ -175,19 +178,19 @@ def show():
     importance = _get_feature_importance(model, feature_names)
 
     _render_global_importance(importance)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_shap_summary()
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_feature_explorer()
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_local_explanation(model, feature_names)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_decision_process()
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_key_insights(importance)
 
@@ -216,31 +219,25 @@ def _render_summary_card():
 # ---------------------------------------------------------------
 
 def _render_global_importance(importance: pd.Series):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Global Feature Importance</div>'
-        '<div class="chart-note">Ranked by the trained Random Forest\'s own importance scores</div>',
-        unsafe_allow_html=True
-    )
+    with section("Global Feature Importance", "Ranked by the trained Random Forest's own importance scores"):
+        imp_df = importance.reset_index()
+        imp_df.columns = ["Feature", "Importance"]
+        imp_df = imp_df.sort_values("Importance", ascending=True)
 
-    imp_df = importance.reset_index()
-    imp_df.columns = ["Feature", "Importance"]
-    imp_df = imp_df.sort_values("Importance", ascending=True)
-
-    fig = px.bar(
-        imp_df, x="Importance", y="Feature", orientation="h",
-        text="Importance", color="Importance",
-        color_continuous_scale=[[0, BLUE], [1, WARNING]],
-    )
-    fig.update_traces(texttemplate="%{text:.3f}", textposition="outside",
-                       textfont=dict(color=TEXT_PRIMARY, size=11))
-    fig.update_layout(
-        **base_plotly_layout(height=max(260, 34 * len(imp_df))),
-        coloraxis_showscale=False,
-        xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER),
-        yaxis=dict(color=TEXT_SECONDARY, showgrid=False),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig = px.bar(
+            imp_df, x="Importance", y="Feature", orientation="h",
+            text="Importance", color="Importance",
+            color_continuous_scale=[[0, BLUE], [1, WARNING]],
+        )
+        fig.update_traces(texttemplate="%{text:.3f}", textposition="outside",
+                           textfont=dict(color=TEXT_PRIMARY, size=11))
+        fig.update_layout(
+            **base_plotly_layout(height=max(260, 34 * len(imp_df))),
+            coloraxis_showscale=False,
+            xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER),
+            yaxis=dict(color=TEXT_SECONDARY, showgrid=False),
+        )
+        st.plotly_chart(fig, use_container_width=True, key="expl_feature_importance")
 
 
 # ---------------------------------------------------------------
@@ -248,43 +245,36 @@ def _render_global_importance(importance: pd.Series):
 # ---------------------------------------------------------------
 
 def _render_shap_summary():
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">SHAP Summary Plot</div>',
-        unsafe_allow_html=True
-    )
+    with section("SHAP Summary Plot"):
+        if not (SHAP_AVAILABLE and MATPLOTLIB_AVAILABLE):
+            st.warning("SHAP or matplotlib isn't available, so the summary plot can't be rendered.")
+            return
 
-    if not (SHAP_AVAILABLE and MATPLOTLIB_AVAILABLE):
-        st.warning("SHAP or matplotlib isn't available, so the summary plot can't be rendered.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
+        X_sample, shap_vals = _compute_shap()
 
-    X_sample, shap_vals = _compute_shap()
+        if shap_vals is None:
+            st.warning(
+                "Couldn't compute SHAP values: "
+                f"{st.session_state.get('_shap_error', 'unknown error')}. "
+                "This usually means the model path, the feature matrix shape, or the SHAP "
+                "API version doesn't match what this page assumes - let me know the error "
+                "and I'll adjust it."
+            )
+            return
 
-    if shap_vals is None:
-        st.warning(
-            "Couldn't compute SHAP values: "
-            f"{st.session_state.get('_shap_error', 'unknown error')}. "
-            "This usually means the model path, the feature matrix shape, or the SHAP "
-            "API version doesn't match what this page assumes - let me know the error "
-            "and I'll adjust it."
+        _apply_dark_matplotlib()
+        fig = plt.figure(figsize=(9, 5))
+        shap.summary_plot(shap_vals, X_sample, show=False, plot_size=None)
+        plt.gcf().set_facecolor(CARD)
+        st.pyplot(plt.gcf(), use_container_width=True)
+        plt.close(fig)
+
+        st.markdown(
+            '<div class="section-subtitle" style="margin-top:8px; margin-bottom:0;">'
+            '🔴 Red = higher feature values &nbsp;·&nbsp; 🔵 Blue = lower feature values &nbsp;·&nbsp; '
+            'Features at the top influence predictions the most.</div>',
+            unsafe_allow_html=True
         )
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    _apply_dark_matplotlib()
-    fig = plt.figure(figsize=(9, 5))
-    shap.summary_plot(shap_vals, X_sample, show=False, plot_size=None)
-    plt.gcf().set_facecolor(CARD)
-    st.pyplot(plt.gcf(), use_container_width=True)
-    plt.close(fig)
-
-    st.markdown(
-        '<div class="chart-note" style="margin-top:8px;">'
-        '🔴 Red = higher feature values &nbsp;·&nbsp; 🔵 Blue = lower feature values &nbsp;·&nbsp; '
-        'Features at the top influence predictions the most.</div>',
-        unsafe_allow_html=True
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------
@@ -292,38 +282,33 @@ def _render_shap_summary():
 # ---------------------------------------------------------------
 
 def _render_feature_explorer():
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Feature Impact Explorer</div>',
-        unsafe_allow_html=True
-    )
+    with section("Feature Impact Explorer"):
+        df = load_scored_fleet()
+        numeric_cols = [
+            "Air temperature", "Process temperature", "Rotational speed",
+            "Torque", "Tool wear", "Risk Score", "Health Score",
+        ]
+        numeric_cols = [c for c in numeric_cols if c in df.columns]
 
-    df = load_scored_fleet()
-    numeric_cols = [
-        "Air temperature", "Process temperature", "Rotational speed",
-        "Torque", "Tool wear", "Risk Score", "Health Score",
-    ]
-    numeric_cols = [c for c in numeric_cols if c in df.columns]
+        selected = st.selectbox("Select a feature", numeric_cols, label_visibility="collapsed")
 
-    selected = st.selectbox("Select a feature", numeric_cols, label_visibility="collapsed")
+        series = df[selected]
+        c1, c2, c3, c4 = st.columns(4)
+        kpi_card(c1, "μ", "Average", f"{series.mean():.2f}", BLUE, "rgba(59,130,246,0.14)")
+        kpi_card(c2, "▼", "Min", f"{series.min():.2f}", HEALTHY, "rgba(34,197,94,0.14)")
+        kpi_card(c3, "▲", "Max", f"{series.max():.2f}", CRITICAL, "rgba(239,68,68,0.14)")
+        kpi_card(c4, "σ", "Std Dev", f"{series.std():.2f}", WARNING, "rgba(245,158,11,0.14)")
 
-    series = df[selected]
-    c1, c2, c3, c4 = st.columns(4)
-    kpi_card(c1, "μ", "Average", f"{series.mean():.2f}", BLUE, "rgba(59,130,246,0.14)")
-    kpi_card(c2, "▼", "Min", f"{series.min():.2f}", HEALTHY, "rgba(34,197,94,0.14)")
-    kpi_card(c3, "▲", "Max", f"{series.max():.2f}", CRITICAL, "rgba(239,68,68,0.14)")
-    kpi_card(c4, "σ", "Std Dev", f"{series.std():.2f}", WARNING, "rgba(245,158,11,0.14)")
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-    fig = px.histogram(df, x=selected, nbins=30, color_discrete_sequence=[BLUE])
-    fig.update_layout(
-        **base_plotly_layout(height=260),
-        xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER),
-        yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Machines"),
-        bargap=0.05,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig = px.histogram(df, x=selected, nbins=30, color_discrete_sequence=[BLUE])
+        fig.update_layout(
+            **base_plotly_layout(height=260),
+            xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER),
+            yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Machines"),
+            bargap=0.05,
+        )
+        st.plotly_chart(fig, use_container_width=True, key="expl_feature_explorer_hist")
 
 
 # ---------------------------------------------------------------
@@ -331,106 +316,98 @@ def _render_feature_explorer():
 # ---------------------------------------------------------------
 
 def _render_local_explanation(model, feature_names: list):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Local Prediction Explanation</div>'
-        '<div class="chart-note">Why did this specific machine get its risk score?</div>',
-        unsafe_allow_html=True
-    )
-
-    df = load_scored_fleet()
-    row_number = st.number_input(
-        "Row number", min_value=0, max_value=len(df) - 1, value=0, step=1,
-        help="Row index in the fleet dataset (0-based).",
-    )
-
-    row = df.iloc[[row_number]]
-    fg, _ = (CRITICAL, None) if row["Status"].iloc[0] == "Critical" else \
-            (WARNING, None) if row["Status"].iloc[0] == "Warning" else (HEALTHY, None)
-
-    c1, c2, c3 = st.columns(3)
-    kpi_card(c1, "🎯", "Prediction", row["Status"].iloc[0], fg, "rgba(148,163,184,0.14)")
-    kpi_card(c2, "⚠️", "Risk Score", f'{row["Risk Score"].iloc[0]:.1f}', fg, "rgba(148,163,184,0.14)")
-    kpi_card(c3, "💙", "Health Score", f'{row["Health Score"].iloc[0]:.1f}', fg, "rgba(148,163,184,0.14)")
-
-    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-
-    if not SHAP_AVAILABLE:
-        st.warning("SHAP isn't available, so per-machine contributions can't be computed.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    try:
-        X_row = get_feature_matrix(row)
-        explainer = shap.TreeExplainer(model)
-
-        waterfall_rendered = False
-        try:
-            explanation = explainer(X_row)
-            values = explanation.values
-            if values.ndim == 3:
-                values = values[:, :, 1]
-            single = shap.Explanation(
-                values=values[0],
-                base_values=explanation.base_values[0]
-                if np.ndim(explanation.base_values) > 0 else explanation.base_values,
-                data=X_row.iloc[0] if isinstance(X_row, pd.DataFrame) else X_row[0],
-                feature_names=feature_names,
-            )
-            _apply_dark_matplotlib()
-            fig = plt.figure(figsize=(9, 4.5))
-            shap.plots.waterfall(single, show=False, max_display=10)
-            plt.gcf().set_facecolor(CARD)
-            st.pyplot(plt.gcf(), use_container_width=True)
-            plt.close(fig)
-            waterfall_rendered = True
-        except Exception:
-            waterfall_rendered = False
-
-        if not waterfall_rendered:
-            # Fallback: ranked horizontal contribution chart in Plotly,
-            # built from the raw shap_values() output instead of the
-            # newer Explanation-based waterfall API.
-            raw_shap = explainer.shap_values(X_row)
-            contrib = _positive_class_shap(raw_shap)[0]
-            contrib_df = pd.DataFrame({"Feature": feature_names, "Contribution": contrib})
-            contrib_df = contrib_df.reindex(
-                contrib_df["Contribution"].abs().sort_values(ascending=True).index
-            )
-
-            fig = px.bar(
-                contrib_df, x="Contribution", y="Feature", orientation="h",
-                color="Contribution", color_continuous_scale=[[0, HEALTHY], [0.5, "#171b22"], [1, CRITICAL]],
-            )
-            fig.update_layout(
-                **base_plotly_layout(height=max(260, 30 * len(contrib_df))),
-                coloraxis_showscale=False,
-                xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Contribution to risk"),
-                yaxis=dict(color=TEXT_SECONDARY, showgrid=False),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            top_positive = contrib_df.sort_values("Contribution", ascending=False).head(3)
-            top_negative = contrib_df.sort_values("Contribution", ascending=True).head(3)
-
-            colc1, colc2 = st.columns(2)
-            with colc1:
-                st.markdown("**Top features increasing risk**")
-                for _, r in top_positive.iterrows():
-                    st.markdown(f"- {r['Feature']}: +{r['Contribution']:.3f}")
-            with colc2:
-                st.markdown("**Top features reducing risk**")
-                for _, r in top_negative.iterrows():
-                    st.markdown(f"- {r['Feature']}: {r['Contribution']:.3f}")
-
-    except Exception as e:
-        st.warning(
-            f"Couldn't generate a local explanation for this machine: {e}. "
-            "This is likely a mismatch between the assumed feature matrix shape "
-            "and what the model actually expects - share src/preprocessing.py "
-            "and I'll fix it precisely."
+    with section("Local Prediction Explanation", "Why did this specific machine get its risk score?"):
+        df = load_scored_fleet()
+        row_number = st.number_input(
+            "Row number", min_value=0, max_value=len(df) - 1, value=0, step=1,
+            help="Row index in the fleet dataset (0-based).",
         )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        row = df.iloc[[row_number]]
+        fg, _ = (CRITICAL, None) if row["Status"].iloc[0] == "Critical" else \
+                (WARNING, None) if row["Status"].iloc[0] == "Warning" else (HEALTHY, None)
+
+        c1, c2, c3 = st.columns(3)
+        kpi_card(c1, "🎯", "Prediction", row["Status"].iloc[0], fg, "rgba(148,163,184,0.14)")
+        kpi_card(c2, "⚠️", "Risk Score", f'{row["Risk Score"].iloc[0]:.1f}', fg, "rgba(148,163,184,0.14)")
+        kpi_card(c3, "💙", "Health Score", f'{row["Health Score"].iloc[0]:.1f}', fg, "rgba(148,163,184,0.14)")
+
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+
+        if not SHAP_AVAILABLE:
+            st.warning("SHAP isn't available, so per-machine contributions can't be computed.")
+            return
+
+        try:
+            X_row = get_feature_matrix(row)
+            explainer = shap.TreeExplainer(model)
+
+            waterfall_rendered = False
+            try:
+                explanation = explainer(X_row)
+                values = explanation.values
+                if values.ndim == 3:
+                    values = values[:, :, 1]
+                single = shap.Explanation(
+                    values=values[0],
+                    base_values=explanation.base_values[0]
+                    if np.ndim(explanation.base_values) > 0 else explanation.base_values,
+                    data=X_row.iloc[0] if isinstance(X_row, pd.DataFrame) else X_row[0],
+                    feature_names=feature_names,
+                )
+                _apply_dark_matplotlib()
+                fig = plt.figure(figsize=(9, 4.5))
+                shap.plots.waterfall(single, show=False, max_display=10)
+                plt.gcf().set_facecolor(CARD)
+                st.pyplot(plt.gcf(), use_container_width=True)
+                plt.close(fig)
+                waterfall_rendered = True
+            except Exception:
+                waterfall_rendered = False
+
+            if not waterfall_rendered:
+                # Fallback: ranked horizontal contribution chart in Plotly,
+                # built from the raw shap_values() output instead of the
+                # newer Explanation-based waterfall API.
+                raw_shap = explainer.shap_values(X_row)
+                contrib = _positive_class_shap(raw_shap)[0]
+                contrib_df = pd.DataFrame({"Feature": feature_names, "Contribution": contrib})
+                contrib_df = contrib_df.reindex(
+                    contrib_df["Contribution"].abs().sort_values(ascending=True).index
+                )
+
+                fig = px.bar(
+                    contrib_df, x="Contribution", y="Feature", orientation="h",
+                    color="Contribution", color_continuous_scale=[[0, HEALTHY], [0.5, "#171b22"], [1, CRITICAL]],
+                )
+                fig.update_layout(
+                    **base_plotly_layout(height=max(260, 30 * len(contrib_df))),
+                    coloraxis_showscale=False,
+                    xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Contribution to risk"),
+                    yaxis=dict(color=TEXT_SECONDARY, showgrid=False),
+                )
+                st.plotly_chart(fig, use_container_width=True, key="expl_local_contrib_fallback")
+
+                top_positive = contrib_df.sort_values("Contribution", ascending=False).head(3)
+                top_negative = contrib_df.sort_values("Contribution", ascending=True).head(3)
+
+                colc1, colc2 = st.columns(2)
+                with colc1:
+                    st.markdown("**Top features increasing risk**")
+                    for _, r in top_positive.iterrows():
+                        st.markdown(f"- {r['Feature']}: +{r['Contribution']:.3f}")
+                with colc2:
+                    st.markdown("**Top features reducing risk**")
+                    for _, r in top_negative.iterrows():
+                        st.markdown(f"- {r['Feature']}: {r['Contribution']:.3f}")
+
+        except Exception as e:
+            st.warning(
+                f"Couldn't generate a local explanation for this machine: {e}. "
+                "This is likely a mismatch between the assumed feature matrix shape "
+                "and what the model actually expects - share src/preprocessing.py "
+                "and I'll fix it precisely."
+            )
 
 
 # ---------------------------------------------------------------
@@ -439,34 +416,16 @@ def _render_local_explanation(model, feature_names: list):
 
 def _render_decision_process():
     steps = [
-        ("📡", "Sensor Data", "Air temp, process temp, rotational speed, torque, tool wear"),
-        ("🛠️", "Feature Engineering", "Derived signals computed from raw sensors"),
-        ("🌲", "Random Forest", "Trained classifier scores the machine"),
-        ("📈", "Probability", "Model's raw failure probability"),
-        ("⚠️", "Risk Score", "Probability scaled to 0-100"),
-        ("💙", "Health Score", "Inverse view of risk, 0-100"),
-        ("✅", "Recommendation", "Action for the maintenance engineer"),
+        ("📡", "Sensor Data"),
+        ("🛠️", "Feature Engineering"),
+        ("🌲", "Random Forest"),
+        ("📈", "Probability"),
+        ("⚠️", "Risk Score"),
+        ("💙", "Health Score"),
+        ("✅", "Recommendation"),
     ]
-
-    rows_html = ""
-    for i, (icon, title, desc) in enumerate(steps):
-        rows_html += (
-            f'<div style="display:flex;align-items:center;gap:14px;padding:10px 4px;">'
-            f'<div style="width:34px;height:34px;border-radius:8px;background:rgba(59,130,246,0.14);'
-            f'display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">{icon}</div>'
-            f'<div><div style="color:{TEXT_PRIMARY};font-weight:600;font-size:13.5px;">{title}</div>'
-            f'<div style="color:{TEXT_SECONDARY};font-size:11.5px;">{desc}</div></div></div>'
-        )
-        if i < len(steps) - 1:
-            rows_html += (
-                f'<div style="text-align:center;color:{TEXT_SECONDARY};font-size:14px;">↓</div>'
-            )
-
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Model Decision Process</div>'
-        f'{rows_html}</div>',
-        unsafe_allow_html=True
-    )
+    with section("Model Decision Process"):
+        workflow_strip(steps)
 
 
 # ---------------------------------------------------------------
@@ -497,11 +456,8 @@ def _render_key_insights(importance: pd.Series):
         f"(importance: {ranked.iloc[-1]:.3f})."
     )
 
-    cols = st.columns(2)
-    for i, insight in enumerate(insights[:6]):
-        with cols[i % 2]:
-            st.markdown(
-                '<div class="chart-card" style="margin-bottom:14px;">'
-                f'<div class="summary-line">💡 {insight}</div></div>',
-                unsafe_allow_html=True
-            )
+    cards = [
+        f'<div class="grid-card"><div class="summary-line">💡 {insight}</div></div>'
+        for insight in insights[:6]
+    ]
+    card_grid(cards, columns=2)

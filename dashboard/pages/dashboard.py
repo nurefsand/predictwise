@@ -1,9 +1,12 @@
 """
-dashboard/pages/dashboard.py
+dashboard/views/dashboard.py
 
 The main fleet Dashboard page. No ML logic lives here - all scoring
 comes from dashboard.data.load_scored_fleet(), which itself only
 calls src/pipeline.py. This file is UI only: layout, charts, tables.
+
+Card sections use dashboard.layout.section() - the shared layout
+system - instead of a page-local chart-card pattern.
 """
 
 import streamlit as st
@@ -17,6 +20,7 @@ from dashboard.theme import (
     TEXT_PRIMARY, TEXT_SECONDARY,
     STATUS_COLORS, badge_html, kpi_card, base_plotly_layout,
 )
+from dashboard.layout import section, spacer
 from dashboard.data import load_scored_fleet
 
 
@@ -26,13 +30,13 @@ def show():
     _render_header()
     _render_ai_summary(df)
 
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
     _render_kpis(df)
 
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
     _render_charts(df)
 
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    spacer()
     _render_table(df)
 
 
@@ -118,121 +122,107 @@ def _render_charts(df: pd.DataFrame):
 
 
 def _render_donut(df: pd.DataFrame):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Machine Status Overview</div>',
-        unsafe_allow_html=True
-    )
+    with section("Machine Status Overview"):
+        status_counts = df["Status"].value_counts().reset_index()
+        status_counts.columns = ["Status", "Count"]
 
-    status_counts = df["Status"].value_counts().reset_index()
-    status_counts.columns = ["Status", "Count"]
+        # softer, desaturated palette + no pull on Healthy so it doesn't
+        # visually dominate the chart despite being the largest slice
+        color_map = {"Healthy": HEALTHY_SOFT, "Warning": WARNING_SOFT, "Critical": CRITICAL_SOFT}
+        pull_map = {"Healthy": 0.0, "Warning": 0.04, "Critical": 0.07}
 
-    # softer, desaturated palette + no pull on Healthy so it doesn't
-    # visually dominate the chart despite being the largest slice
-    color_map = {"Healthy": HEALTHY_SOFT, "Warning": WARNING_SOFT, "Critical": CRITICAL_SOFT}
-    pull_map = {"Healthy": 0.0, "Warning": 0.04, "Critical": 0.07}
+        fig = px.pie(
+            status_counts,
+            names="Status",
+            values="Count",
+            hole=0.68,
+            color="Status",
+            color_discrete_map=color_map,
+        )
 
-    fig = px.pie(
-        status_counts,
-        names="Status",
-        values="Count",
-        hole=0.68,
-        color="Status",
-        color_discrete_map=color_map,
-    )
+        fig.update_traces(
+            textposition="inside",
+            textinfo="percent",
+            pull=[pull_map.get(s, 0) for s in status_counts["Status"]],
+            marker=dict(line=dict(color="#171b22", width=2)),
+            sort=False,
+        )
 
-    fig.update_traces(
-        textposition="inside",
-        textinfo="percent",
-        pull=[pull_map.get(s, 0) for s in status_counts["Status"]],
-        marker=dict(line=dict(color="#171b22", width=2)),
-        sort=False,
-    )
+        fig.update_layout(
+            **base_plotly_layout(height=205, margin=dict(l=10, r=10, t=6, b=30)),
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="top", y=-0.12,
+                xanchor="center", x=0.5,
+                font=dict(color=TEXT_PRIMARY, size=12),
+                itemwidth=40,
+            ),
+        )
 
-    fig.update_layout(
-        **base_plotly_layout(height=205, margin=dict(l=10, r=10, t=6, b=30)),
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="top", y=-0.12,
-            xanchor="center", x=0.5,
-            font=dict(color=TEXT_PRIMARY, size=12),
-            itemwidth=40,
-        ),
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.plotly_chart(fig, use_container_width=True, key="dashboard_donut")
 
 
 def _render_priority_panel(df: pd.DataFrame):
-    st.markdown(
-        '<div class="chart-card">'
-        '<div class="chart-title">Maintenance Priority Panel</div>'
-        '<div class="chart-note">Machines ranked by risk — what to act on first</div>',
-        unsafe_allow_html=True
-    )
-
-    top_priority = (
-        df.sort_values("Risk Score", ascending=False)
-          .head(8)
-          .reset_index()
-    )
-
-    for _, r in top_priority.iterrows():
-        fg, _ = STATUS_COLORS.get(r["Status"], (TEXT_SECONDARY, "transparent"))
-        row_html = (
-            '<div class="priority-row">'
-            f'<span class="priority-id">Machine {r["index"]}</span>'
-            f'{badge_html(r["Status"])}'
-            f'<span class="priority-reco">{r["Recommendation"]}</span>'
-            f'<span style="color:{fg}; font-weight:700; font-family:\'IBM Plex Mono\',monospace;">{r["Risk Score"]:.1f}</span>'
-            '</div>'
+    with section("Maintenance Priority Panel", "Machines ranked by risk — what to act on first"):
+        top_priority = (
+            df.sort_values("Risk Score", ascending=False)
+              .head(8)
+              .reset_index()
         )
-        st.markdown(row_html, unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        for _, r in top_priority.iterrows():
+            fg, _ = STATUS_COLORS.get(r["Status"], (TEXT_SECONDARY, "transparent"))
+            row_html = (
+                '<div class="priority-row">'
+                f'<span class="priority-id">Machine {r["index"]}</span>'
+                f'{badge_html(r["Status"])}'
+                f'<span class="priority-reco">{r["Recommendation"]}</span>'
+                f'<span style="color:{fg}; font-weight:700; font-family:\'IBM Plex Mono\',monospace;">{r["Risk Score"]:.1f}</span>'
+                '</div>'
+            )
+            st.markdown(row_html, unsafe_allow_html=True)
 
 
 def _render_table(df: pd.DataFrame):
-    st.markdown('<div class="chart-title" style="margin-top:6px;">Machine Overview</div>', unsafe_allow_html=True)
+    with section("Machine Overview"):
+        selected_status = st.radio(
+            "Filter Machines",
+            ["All", "Healthy", "Warning", "Critical"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
 
-    selected_status = st.radio(
-        "Filter Machines",
-        ["All", "Healthy", "Warning", "Critical"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+        filtered_df = df if selected_status == "All" else df[df["Status"] == selected_status]
+        filtered_df = filtered_df.sort_values("Risk Score", ascending=False)
 
-    filtered_df = df if selected_status == "All" else df[df["Status"] == selected_status]
-    filtered_df = filtered_df.sort_values("Risk Score", ascending=False)
+        table_cols = [
+            "Type", "Air temperature", "Process temperature", "Rotational speed",
+            "Torque", "Tool wear", "Risk Score", "Health Score", "Status", "Recommendation"
+        ]
 
-    table_cols = [
-        "Type", "Air temperature", "Process temperature", "Rotational speed",
-        "Torque", "Tool wear", "Risk Score", "Health Score", "Status", "Recommendation"
-    ]
+        def highlight_row(row):
+            fg, bg = STATUS_COLORS.get(row["Status"], (TEXT_SECONDARY, "transparent"))
+            styles = []
+            for col in row.index:
+                if col == "Status":
+                    styles.append(f"background-color:{bg}; color:{fg}; font-weight:700;")
+                elif col in ("Risk Score", "Health Score"):
+                    styles.append(f"color:{fg}; font-weight:700;")
+                else:
+                    styles.append("")
+            return styles
 
-    def highlight_row(row):
-        fg, bg = STATUS_COLORS.get(row["Status"], (TEXT_SECONDARY, "transparent"))
-        styles = []
-        for col in row.index:
-            if col == "Status":
-                styles.append(f"background-color:{bg}; color:{fg}; font-weight:700;")
-            elif col in ("Risk Score", "Health Score"):
-                styles.append(f"color:{fg}; font-weight:700;")
-            else:
-                styles.append("")
-        return styles
+        styled_table = (
+            filtered_df[table_cols]
+            .style
+            .apply(highlight_row, axis=1)
+            .format({"Risk Score": "{:.1f}", "Health Score": "{:.1f}"})
+        )
 
-    styled_table = (
-        filtered_df[table_cols]
-        .style
-        .apply(highlight_row, axis=1)
-        .format({"Risk Score": "{:.1f}", "Health Score": "{:.1f}"})
-    )
+        st.dataframe(styled_table, use_container_width=True, hide_index=True, height=440)
 
-    st.dataframe(styled_table, use_container_width=True, hide_index=True, height=440)
-
-    st.markdown(
-        f"<div class='chart-note' style='margin-top:8px;'>{len(filtered_df):,} machines shown.</div>",
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            f"<div class='section-subtitle' style='margin-top:8px; margin-bottom:0;'>{len(filtered_df):,} machines shown.</div>",
+            unsafe_allow_html=True
+        )

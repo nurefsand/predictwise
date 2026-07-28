@@ -1,5 +1,5 @@
 """
-dashboard/pages/model_performance.py
+dashboard/views/model_performance.py
 
 Evaluates the already-trained Random Forest model. Never retrains it.
 
@@ -50,6 +50,7 @@ from dashboard.theme import (
     TEXT_PRIMARY, TEXT_SECONDARY, BORDER, CARD,
     page_title, kpi_card, base_plotly_layout,
 )
+from dashboard.layout import section, spacer, card_grid
 from dashboard.data import load_scored_fleet
 from src.pipeline import get_feature_matrix
 
@@ -159,35 +160,35 @@ def show():
     if not bundle["available"]:
         _render_no_ground_truth_notice()
         _render_confidence_distribution(bundle["df"])
-        st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+        spacer()
         _render_feature_importance()
-        st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+        spacer()
         _render_validation_summary(bundle["df"], ground_truth_found=False)
         return
 
     _render_kpis(bundle)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_confusion_matrix(bundle)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_classification_report(bundle)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_roc_curve(bundle)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_precision_recall_bars(bundle)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_confidence_distribution(bundle["df"])
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_feature_importance()
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_validation_summary(bundle["df"], ground_truth_found=True)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_insights(bundle)
 
@@ -230,36 +231,32 @@ def _render_kpis(bundle: dict):
 # ---------------------------------------------------------------
 
 def _render_confusion_matrix(bundle: dict):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Confusion Matrix</div>',
-        unsafe_allow_html=True
-    )
+    with section("Confusion Matrix"):
+        cross = bundle["cross"]
 
-    cross = bundle["cross"]
+        fig = px.imshow(
+            cross.values, text_auto=True,
+            x=cross.columns.tolist(), y=cross.index.tolist(),
+            color_continuous_scale=[[0, "#171b22"], [1, BLUE]],
+            aspect="auto",
+        )
+        fig.update_traces(textfont=dict(size=14, color=TEXT_PRIMARY))
+        fig.update_layout(
+            **base_plotly_layout(height=260),
+            xaxis=dict(title="Predicted Status", color=TEXT_SECONDARY, side="bottom"),
+            yaxis=dict(title="Actual Outcome", color=TEXT_SECONDARY),
+            coloraxis_showscale=False,
+        )
+        st.plotly_chart(fig, use_container_width=True, key="model_perf_confusion_matrix")
 
-    fig = px.imshow(
-        cross.values, text_auto=True,
-        x=cross.columns.tolist(), y=cross.index.tolist(),
-        color_continuous_scale=[[0, "#171b22"], [1, BLUE]],
-        aspect="auto",
-    )
-    fig.update_traces(textfont=dict(size=14, color=TEXT_PRIMARY))
-    fig.update_layout(
-        **base_plotly_layout(height=260),
-        xaxis=dict(title="Predicted Status", color=TEXT_SECONDARY, side="bottom"),
-        yaxis=dict(title="Actual Outcome", color=TEXT_SECONDARY),
-        coloraxis_showscale=False,
-    )
-    st.plotly_chart(fig, use_container_width=True, key="model_perf_confusion_matrix")
-
-    st.markdown(
-        '<div class="chart-note">Rows are the real outcome (from the dataset\'s true '
-        "failure label). Columns are what the model predicted. A well-performing model "
-        "should show actual Failures concentrated under Warning/Critical, and actual "
-        "No-Failures concentrated under Healthy.</div>",
-        unsafe_allow_html=True
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-subtitle" style="margin-top:8px; margin-bottom:0;">'
+            'Rows are the real outcome (from the dataset\'s true '
+            "failure label). Columns are what the model predicted. A well-performing model "
+            "should show actual Failures concentrated under Warning/Critical, and actual "
+            "No-Failures concentrated under Healthy.</div>",
+            unsafe_allow_html=True
+        )
 
 
 # ---------------------------------------------------------------
@@ -267,28 +264,25 @@ def _render_confusion_matrix(bundle: dict):
 # ---------------------------------------------------------------
 
 def _render_classification_report(bundle: dict):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Classification Report</div>'
-        '<div class="chart-note">Binary evaluation: Warning + Critical are both treated '
-        'as "predicted Failure" here, compared against the real failure label.</div>',
-        unsafe_allow_html=True
-    )
+    with section(
+        "Classification Report",
+        'Binary evaluation: Warning + Critical are both treated as "predicted Failure" here, '
+        "compared against the real failure label."
+    ):
+        report = bundle["report"]
+        rows = []
+        for label in ["No Failure", "Failure", "macro avg", "weighted avg"]:
+            r = report[label]
+            rows.append({
+                "Class": label,
+                "Precision": round(r["precision"], 3),
+                "Recall": round(r["recall"], 3),
+                "F1-score": round(r["f1-score"], 3),
+                "Support": int(r["support"]),
+            })
+        report_df = pd.DataFrame(rows)
 
-    report = bundle["report"]
-    rows = []
-    for label in ["No Failure", "Failure", "macro avg", "weighted avg"]:
-        r = report[label]
-        rows.append({
-            "Class": label,
-            "Precision": round(r["precision"], 3),
-            "Recall": round(r["recall"], 3),
-            "F1-score": round(r["f1-score"], 3),
-            "Support": int(r["support"]),
-        })
-    report_df = pd.DataFrame(rows)
-
-    st.dataframe(report_df, use_container_width=True, hide_index=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.dataframe(report_df, use_container_width=True, hide_index=True)
 
 
 # ---------------------------------------------------------------
@@ -296,31 +290,28 @@ def _render_classification_report(bundle: dict):
 # ---------------------------------------------------------------
 
 def _render_roc_curve(bundle: dict):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">ROC Curve</div>'
-        '<div class="chart-note">Ground truth here is binary (Failure vs No Failure), '
-        "so this is a single ROC curve rather than multiclass one-vs-rest.</div>",
-        unsafe_allow_html=True
-    )
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=bundle["fpr"], y=bundle["tpr"], mode="lines",
-        name=f"Failure (AUC = {bundle['roc_auc']:.3f})",
-        line=dict(color=BLUE, width=2.5),
-    ))
-    fig.add_trace(go.Scatter(
-        x=[0, 1], y=[0, 1], mode="lines",
-        name="Random guess", line=dict(color=TEXT_SECONDARY, width=1, dash="dash"),
-    ))
-    fig.update_layout(
-        **base_plotly_layout(height=340),
-        xaxis=dict(title="False Positive Rate", color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1]),
-        yaxis=dict(title="True Positive Rate", color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1]),
-        legend=dict(font=dict(color=TEXT_PRIMARY, size=11), x=0.55, y=0.08),
-    )
-    st.plotly_chart(fig, use_container_width=True, key="model_perf_roc_curve")
-    st.markdown("</div>", unsafe_allow_html=True)
+    with section(
+        "ROC Curve",
+        "Ground truth here is binary (Failure vs No Failure), so this is a single ROC "
+        "curve rather than multiclass one-vs-rest."
+    ):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=bundle["fpr"], y=bundle["tpr"], mode="lines",
+            name=f"Failure (AUC = {bundle['roc_auc']:.3f})",
+            line=dict(color=BLUE, width=2.5),
+        ))
+        fig.add_trace(go.Scatter(
+            x=[0, 1], y=[0, 1], mode="lines",
+            name="Random guess", line=dict(color=TEXT_SECONDARY, width=1, dash="dash"),
+        ))
+        fig.update_layout(
+            **base_plotly_layout(height=340),
+            xaxis=dict(title="False Positive Rate", color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1]),
+            yaxis=dict(title="True Positive Rate", color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1]),
+            legend=dict(font=dict(color=TEXT_PRIMARY, size=11), x=0.55, y=0.08),
+        )
+        st.plotly_chart(fig, use_container_width=True, key="model_perf_roc_curve")
 
 
 # ---------------------------------------------------------------
@@ -336,36 +327,28 @@ def _render_precision_recall_bars(bundle: dict):
     left, right = st.columns(2)
 
     with left:
-        st.markdown(
-            '<div class="chart-card"><div class="chart-title">Precision by Class</div>',
-            unsafe_allow_html=True
-        )
-        fig = px.bar(x=classes, y=precision_vals, text=[f"{v:.1%}" for v in precision_vals],
-                     color=classes, color_discrete_sequence=[HEALTHY, CRITICAL])
-        fig.update_traces(textposition="outside", textfont=dict(color=TEXT_PRIMARY))
-        fig.update_layout(
-            **base_plotly_layout(height=260), showlegend=False,
-            xaxis=dict(color=TEXT_SECONDARY, title=""),
-            yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1.1]),
-        )
-        st.plotly_chart(fig, use_container_width=True, key="model_perf_precision_by_class")
-        st.markdown("</div>", unsafe_allow_html=True)
+        with section("Precision by Class"):
+            fig = px.bar(x=classes, y=precision_vals, text=[f"{v:.1%}" for v in precision_vals],
+                         color=classes, color_discrete_sequence=[HEALTHY, CRITICAL])
+            fig.update_traces(textposition="outside", textfont=dict(color=TEXT_PRIMARY))
+            fig.update_layout(
+                **base_plotly_layout(height=260), showlegend=False,
+                xaxis=dict(color=TEXT_SECONDARY, title=""),
+                yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1.1]),
+            )
+            st.plotly_chart(fig, use_container_width=True, key="model_perf_precision_by_class")
 
     with right:
-        st.markdown(
-            '<div class="chart-card"><div class="chart-title">Recall by Class</div>',
-            unsafe_allow_html=True
-        )
-        fig = px.bar(x=classes, y=recall_vals, text=[f"{v:.1%}" for v in recall_vals],
-                     color=classes, color_discrete_sequence=[HEALTHY, CRITICAL])
-        fig.update_traces(textposition="outside", textfont=dict(color=TEXT_PRIMARY))
-        fig.update_layout(
-            **base_plotly_layout(height=260), showlegend=False,
-            xaxis=dict(color=TEXT_SECONDARY, title=""),
-            yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1.1]),
-        )
-        st.plotly_chart(fig, use_container_width=True, key="model_perf_recall_by_class")
-        st.markdown("</div>", unsafe_allow_html=True)
+        with section("Recall by Class"):
+            fig = px.bar(x=classes, y=recall_vals, text=[f"{v:.1%}" for v in recall_vals],
+                         color=classes, color_discrete_sequence=[HEALTHY, CRITICAL])
+            fig.update_traces(textposition="outside", textfont=dict(color=TEXT_PRIMARY))
+            fig.update_layout(
+                **base_plotly_layout(height=260), showlegend=False,
+                xaxis=dict(color=TEXT_SECONDARY, title=""),
+                yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, range=[0, 1.1]),
+            )
+            st.plotly_chart(fig, use_container_width=True, key="model_perf_recall_by_class")
 
 
 # ---------------------------------------------------------------
@@ -373,28 +356,24 @@ def _render_precision_recall_bars(bundle: dict):
 # ---------------------------------------------------------------
 
 def _render_confidence_distribution(df: pd.DataFrame):
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Prediction Confidence Distribution</div>',
-        unsafe_allow_html=True
-    )
+    with section("Prediction Confidence Distribution"):
+        fig = px.histogram(df, x="Confidence", nbins=30, color_discrete_sequence=[BLUE])
+        fig.update_layout(
+            **base_plotly_layout(height=260),
+            xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Confidence (%)"),
+            yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Machines"),
+            bargap=0.05,
+        )
+        st.plotly_chart(fig, use_container_width=True, key="model_perf_confidence_dist")
 
-    fig = px.histogram(df, x="Confidence", nbins=30, color_discrete_sequence=[BLUE])
-    fig.update_layout(
-        **base_plotly_layout(height=260),
-        xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Confidence (%)"),
-        yaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER, title="Machines"),
-        bargap=0.05,
-    )
-    st.plotly_chart(fig, use_container_width=True, key="model_perf_confidence_dist")
-
-    st.markdown(
-        '<div class="chart-note">Confidence reflects how far the model\'s probability is '
-        "from the 50/50 decision boundary. Higher confidence generally means a more "
-        "reliable prediction; predictions clustered near 50% are the ones worth a second "
-        "look from an engineer.</div>",
-        unsafe_allow_html=True
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-subtitle" style="margin-top:8px; margin-bottom:0;">'
+            'Confidence reflects how far the model\'s probability is '
+            "from the 50/50 decision boundary. Higher confidence generally means a more "
+            "reliable prediction; predictions clustered near 50% are the ones worth a second "
+            "look from an engineer.</div>",
+            unsafe_allow_html=True
+        )
 
 
 # ---------------------------------------------------------------
@@ -402,31 +381,25 @@ def _render_confidence_distribution(df: pd.DataFrame):
 # ---------------------------------------------------------------
 
 def _render_feature_importance():
-    st.markdown(
-        '<div class="chart-card"><div class="chart-title">Feature Importance</div>'
-        '<div class="chart-note">From the trained Random Forest\'s own importance scores</div>',
-        unsafe_allow_html=True
-    )
+    with section("Feature Importance", "From the trained Random Forest's own importance scores"):
+        importance = _get_feature_importance()
+        pct = (importance / importance.sum() * 100).reset_index()
+        pct.columns = ["Feature", "Importance %"]
+        pct = pct.sort_values("Importance %", ascending=True)
 
-    importance = _get_feature_importance()
-    pct = (importance / importance.sum() * 100).reset_index()
-    pct.columns = ["Feature", "Importance %"]
-    pct = pct.sort_values("Importance %", ascending=True)
-
-    fig = px.bar(
-        pct, x="Importance %", y="Feature", orientation="h", text="Importance %",
-        color="Importance %", color_continuous_scale=[[0, BLUE], [1, WARNING]],
-    )
-    fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside",
-                       textfont=dict(color=TEXT_PRIMARY, size=11))
-    fig.update_layout(
-        **base_plotly_layout(height=max(260, 34 * len(pct))),
-        coloraxis_showscale=False,
-        xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER),
-        yaxis=dict(color=TEXT_SECONDARY, showgrid=False),
-    )
-    st.plotly_chart(fig, use_container_width=True, key="model_perf_feature_importance")
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig = px.bar(
+            pct, x="Importance %", y="Feature", orientation="h", text="Importance %",
+            color="Importance %", color_continuous_scale=[[0, BLUE], [1, WARNING]],
+        )
+        fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside",
+                           textfont=dict(color=TEXT_PRIMARY, size=11))
+        fig.update_layout(
+            **base_plotly_layout(height=max(260, 34 * len(pct))),
+            coloraxis_showscale=False,
+            xaxis=dict(color=TEXT_SECONDARY, gridcolor=BORDER),
+            yaxis=dict(color=TEXT_SECONDARY, showgrid=False),
+        )
+        st.plotly_chart(fig, use_container_width=True, key="model_perf_feature_importance")
 
 
 # ---------------------------------------------------------------
@@ -493,11 +466,8 @@ def _render_insights(bundle: dict):
             f"machines predicted as '{off_diag.columns[c_idx]}'."
         )
 
-    cols = st.columns(2)
-    for i, insight in enumerate(insights[:6]):
-        with cols[i % 2]:
-            st.markdown(
-                '<div class="chart-card" style="margin-bottom:14px;">'
-                f'<div class="summary-line">💡 {insight}</div></div>',
-                unsafe_allow_html=True
-            )
+    cards = [
+        f'<div class="grid-card"><div class="summary-line">💡 {insight}</div></div>'
+        for insight in insights[:6]
+    ]
+    card_grid(cards, columns=2)

@@ -1,5 +1,5 @@
 """
-dashboard/pages/settings.py
+dashboard/views/settings.py
 
 Session preferences, real model/dataset info, and system status.
 No mock charts, no invented metrics - every value here is either a
@@ -7,12 +7,9 @@ live UI preference (stored in st.session_state) or something read
 directly from the real model file, the real dataset, or the real
 src/business_rules.py functions.
 
-Layout note: the brief for this revision asked for four sections
-(Model Information, Risk Thresholds, Export Settings, System
-Information). Dashboard Preferences (default page, table rows, auto
-refresh) isn't in that list, but "keep all current functionality"
-means it can't just disappear - it's kept as a compact section right
-after the top banner, ahead of the four requested ones.
+Card sections use dashboard.layout.section() - the shared layout
+system - so this page no longer needs its own page-local CSS for
+card styling.
 """
 
 import sys
@@ -26,6 +23,7 @@ from dashboard.theme import (
     HEALTHY, WARNING, CRITICAL, BLUE, TEXT_SECONDARY, TEXT_PRIMARY, BORDER,
     page_title, kpi_card,
 )
+from dashboard.layout import section, spacer
 from dashboard.data import load_scored_fleet
 from src.business_rules import calculate_status
 
@@ -52,40 +50,6 @@ DEFAULT_PREFS = {
     "pref_export_format": "CSV",
 }
 
-# Page-scoped spacing/card tweaks only - does not touch dashboard/theme.py,
-# so no other page is affected.
-#
-# IMPORTANT: sections that hold plain native widgets (checkboxes, radio,
-# selectbox, number_input, toggle) must use st.container(border=True,
-# key=...) below, NOT the "open a <div class='chart-card'> via one
-# st.markdown call, then close it with a second st.markdown call"
-# pattern used elsewhere in this app. That split-div pattern only
-# *looks* like it wraps everything because charts/kpi_card divs paint
-# their own matching background color - it doesn't actually nest
-# separate Streamlit elements inside one real container. For plain
-# widgets with no background of their own, that gap shows through as
-# empty page background, which is exactly the big blank area in the
-# screenshot. st.container(border=True, key=...) is the real fix: it
-# produces one genuine DOM container that actually encloses everything
-# placed inside its `with` block.
-_COMPACT_CSS = """
-<style>
-.settings-gap { height: 10px; }
-
-.settings-section-title {
-    display: block;
-    margin-bottom: 4px;
-}
-
-div[class*="st-key-settings_card_"] {
-    background: #171b22;
-    border: 1px solid #2b313d !important;
-    border-radius: 10px;
-    padding: 16px 18px 10px 18px;
-}
-</style>
-"""
-
 
 def _init_prefs():
     for key, default in DEFAULT_PREFS.items():
@@ -95,24 +59,23 @@ def _init_prefs():
 
 def show():
     _init_prefs()
-    st.markdown(_COMPACT_CSS, unsafe_allow_html=True)
 
     page_title("⚙️", "Settings", "Preferences, model info, and system status for this session")
 
     _render_info_banner()
-    st.markdown("<div class='settings-gap'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_dashboard_preferences()
-    st.markdown("<div class='settings-gap'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_model_information()
-    st.markdown("<div class='settings-gap'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_risk_thresholds()
-    st.markdown("<div class='settings-gap'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_export_settings()
-    st.markdown("<div class='settings-gap'></div>", unsafe_allow_html=True)
+    spacer()
 
     _render_system_information()
 
@@ -128,17 +91,11 @@ def _render_info_banner():
 
 
 # ---------------------------------------------------------------
-# DASHBOARD PREFERENCES (kept, tightened)
+# DASHBOARD PREFERENCES
 # ---------------------------------------------------------------
 
 def _render_dashboard_preferences():
-    with st.container(border=True, key="settings_card_prefs"):
-        st.markdown(
-            '<div class="chart-title settings-section-title">Dashboard Preferences</div>'
-            '<div style="height:6px"></div>',
-            unsafe_allow_html=True
-        )
-
+    with section("Dashboard Preferences"):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             st.session_state["pref_default_page"] = st.selectbox(
@@ -178,9 +135,7 @@ def _load_model_for_info():
 
 
 def _render_model_information():
-    with st.container(border=True, key="settings_card_model"):
-        st.markdown('<div class="chart-title settings-section-title">Model Information</div>', unsafe_allow_html=True)
-
+    with section("Model Information"):
         try:
             model = _load_model_for_info()
             model_ok = True
@@ -207,7 +162,7 @@ def _render_model_information():
                   BLUE, "rgba(59,130,246,0.14)", "n_estimators")
 
         st.markdown(
-            "<div class='chart-note' style='margin-top:6px;'>"
+            "<div class='section-subtitle' style='margin-top:8px; margin-bottom:0;'>"
             "*No formal model-version log exists yet — this is the model file's last-modified "
             "timestamp, not a recorded training date.</div>",
             unsafe_allow_html=True
@@ -235,14 +190,7 @@ def _infer_risk_thresholds() -> pd.DataFrame:
 
 
 def _render_risk_thresholds():
-    with st.container(border=True, key="settings_card_thresholds"):
-        st.markdown(
-            '<div class="chart-title settings-section-title">Risk Thresholds</div>'
-            '<div class="chart-note">Detected live from src/business_rules.py — not hardcoded</div>'
-            '<div style="height:10px"></div>',
-            unsafe_allow_html=True
-        )
-
+    with section("Risk Thresholds", "Detected live from src/business_rules.py — not hardcoded"):
         try:
             thresholds = _infer_risk_thresholds()
             status_colors = {"Healthy": HEALTHY, "Warning": WARNING, "Critical": CRITICAL}
@@ -266,13 +214,7 @@ def _render_risk_thresholds():
 # ---------------------------------------------------------------
 
 def _render_export_settings():
-    with st.container(border=True, key="settings_card_export"):
-        st.markdown(
-            '<div class="chart-title settings-section-title">Export Settings</div>'
-            '<div style="height:6px"></div>',
-            unsafe_allow_html=True
-        )
-
+    with section("Export Settings"):
         left, right = st.columns([2, 1])
 
         with left:
@@ -298,13 +240,7 @@ def _render_export_settings():
 # ---------------------------------------------------------------
 
 def _render_system_information():
-    with st.container(border=True, key="settings_card_system"):
-        st.markdown(
-            '<div class="chart-title settings-section-title">System Information</div>'
-            '<div style="height:6px"></div>',
-            unsafe_allow_html=True
-        )
-
+    with section("System Information"):
         py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         st_version = st.__version__
 

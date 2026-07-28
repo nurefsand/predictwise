@@ -107,9 +107,20 @@ def inject_theme():
 
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
+/* Hide Streamlit's own menu/deploy clutter, but NOT the whole header -
+   the whole header contains the "reopen sidebar" arrow
+   ([data-testid="stExpandSidebarButton"]), and hiding the header
+   hides that button too, permanently trapping the user with a
+   collapsed sidebar and no way to reopen it. Target only the
+   specific elements we don't want instead. */
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
-header {{visibility: hidden;}}
+[data-testid="stMainMenu"] {{visibility: hidden;}}
+[data-testid="stAppDeployButton"] {{visibility: hidden;}}
+[data-testid="stHeader"] {{
+    background: transparent;
+    box-shadow: none;
+}}
 
 html, body, [class*="css"] {{
     font-family: 'Inter', -apple-system, sans-serif;
@@ -317,29 +328,121 @@ section[data-testid="stSidebar"] div[role="radiogroup"] label {{
     font-family: 'IBM Plex Mono', monospace;
 }}
 
-/* ---------- Chart Cards ---------- */
+/* ---------- Unified Section Card ----------
+   Every bordered "section" on every page (a title + optional subtitle
+   + a chart/table/widgets below it) renders through ONE mechanism:
+   dashboard.layout.section(), which wraps content in
+   st.container(border=True, key="section_<slug>"). Targeting the key
+   prefix here means every section on every page gets IDENTICAL
+   background/border/radius/padding/shadow - one card style, not a
+   per-page reimplementation of it. */
 
-.chart-card{{
-    background: {CARD};
-    border-radius: 10px;
-    padding: 18px 20px;
-    height: 100%;
+[class*="st-key-section_"] {{
+    background: {CARD} !important;
+    border: 1px solid {BORDER} !important;
+    border-radius: 10px !important;
+    padding: 16px 20px 18px 20px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.14) !important;
 }}
 
-.chart-title{{
+.section-title{{
     font-family: 'Rajdhani', sans-serif;
     font-size: 15.5px;
     font-weight: 600;
     color: {TEXT_PRIMARY};
     letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     text-transform: uppercase;
 }}
 
-.chart-note {{
+.section-subtitle {{
     font-size: 11px;
     color: {TEXT_SECONDARY};
     margin-bottom: 10px;
+}}
+
+/* ---------- Responsive equal-height card grid ----------
+   Used by dashboard.layout.card_grid() for any "N cards per row"
+   layout (About's tech/feature cards, and any future page that needs
+   the same thing). CSS Grid's default row-stretch behavior is what
+   makes every card in the same row exactly equal height - no manual
+   pixel heights anywhere. */
+
+.card-grid {{
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols, 4), 1fr);
+    gap: 14px;
+}}
+
+@media (max-width: 1100px) {{
+    .card-grid {{ grid-template-columns: repeat(2, 1fr); }}
+}}
+
+@media (max-width: 640px) {{
+    .card-grid {{ grid-template-columns: 1fr; }}
+}}
+
+.grid-card {{
+    background: {CARD};
+    border: 1px solid {BORDER};
+    border-radius: 10px;
+    padding: 16px 18px;
+    height: 100%;
+    box-sizing: border-box;
+}}
+
+.grid-card-icon {{
+    font-size: 22px;
+    margin-bottom: 8px;
+}}
+
+.grid-card-title {{
+    font-weight: 700;
+    font-size: 14.5px;
+    color: {TEXT_PRIMARY};
+    margin-bottom: 4px;
+}}
+
+.grid-card-desc {{
+    font-size: 12.5px;
+    color: {TEXT_SECONDARY};
+    line-height: 1.5;
+}}
+
+/* ---------- Workflow strip (arrows between steps) ---------- */
+
+.workflow-strip {{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}}
+
+.workflow-step {{
+    background: {BG};
+    border: 1px solid {BORDER};
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+    min-width: 140px;
+    flex: 1 1 140px;
+}}
+
+.workflow-icon {{
+    font-size: 20px;
+    margin-bottom: 6px;
+}}
+
+.workflow-label {{
+    font-size: 12.5px;
+    font-weight: 600;
+    color: {TEXT_PRIMARY};
+}}
+
+.workflow-arrow {{
+    font-size: 18px;
+    color: {TEXT_SECONDARY};
+    flex: 0 0 auto;
 }}
 
 /* Streamlit native tweaks */

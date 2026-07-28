@@ -1,19 +1,16 @@
 """
-dashboard/pages/about.py
+dashboard/views/about.py
 
 Project introduction page. Mostly static/descriptive content, but
 every number in Section 7 (Project Statistics) is read live from the
 dataset, the feature pipeline, the trained model, or src/business_rules.py
 - nothing there is a hardcoded/invented figure.
 
-Note on markup style: every section below is built as ONE self-contained
-st.markdown(..., unsafe_allow_html=True) call (opening and closing tags
-in the same call). This project's other pages ran into a real bug where
-splitting a card's opening <div> and closing </div> across two separate
-st.markdown calls silently failed to visually enclose native widgets in
-between (Streamlit does not treat separate markdown calls as one
-continuous HTML stream). Keeping each card fully self-contained in one
-call avoids that entirely.
+Card sections use dashboard.layout.section() and the shared
+card_grid()/grid_card()/workflow_strip() helpers instead of a
+page-local flexbox grid, so tech/feature cards get real equal-height
+rows (4 desktop / 2 tablet / 1 mobile) from theme.py's .card-grid,
+not a one-off About-page-only layout.
 """
 
 from pathlib import Path
@@ -21,10 +18,8 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 
-from dashboard.theme import (
-    HEALTHY, WARNING, CRITICAL, BLUE, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, CARD,
-    kpi_card,
-)
+from dashboard.theme import BLUE, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, kpi_card
+from dashboard.layout import section, spacer, card_grid, grid_card, workflow_strip
 from dashboard.data import load_scored_fleet
 from src.pipeline import get_feature_matrix
 from src.business_rules import calculate_status
@@ -37,6 +32,9 @@ CANDIDATE_LABEL_COLUMNS = [
     "Machine failure", "machine failure", "Machine Failure", "Target", "target",
 ]
 
+# Only the bits that are genuinely unique to this page (hero text,
+# architecture tree, footer) - everything reusable (card grids,
+# section cards, workflow strip) now lives in theme.py.
 _ABOUT_CSS = """
 <style>
 .about-hero-title{
@@ -56,63 +54,6 @@ _ABOUT_CSS = """
     color: """ + TEXT_PRIMARY + """;
     line-height: 1.8;
     max-width: 900px;
-}
-.about-grid{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-}
-.about-tech-card, .about-feature-card{
-    background: """ + CARD + """;
-    border: 1px solid """ + BORDER + """;
-    border-radius: 10px;
-    padding: 16px 18px;
-    flex: 1 1 220px;
-    min-width: 220px;
-}
-.about-tech-icon, .about-feature-icon{
-    font-size: 22px;
-    margin-bottom: 8px;
-}
-.about-tech-name, .about-feature-title{
-    font-weight: 700;
-    font-size: 14.5px;
-    color: """ + TEXT_PRIMARY + """;
-    margin-bottom: 4px;
-}
-.about-tech-desc, .about-feature-desc{
-    font-size: 12.5px;
-    color: """ + TEXT_SECONDARY + """;
-    line-height: 1.5;
-}
-.about-workflow{
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-}
-.about-workflow-step{
-    background: """ + CARD + """;
-    border: 1px solid """ + BORDER + """;
-    border-radius: 10px;
-    padding: 14px 16px;
-    text-align: center;
-    min-width: 140px;
-    flex: 1 1 140px;
-}
-.about-workflow-icon{
-    font-size: 20px;
-    margin-bottom: 6px;
-}
-.about-workflow-label{
-    font-size: 12.5px;
-    font-weight: 600;
-    color: """ + TEXT_PRIMARY + """;
-}
-.about-workflow-arrow{
-    font-size: 18px;
-    color: """ + TEXT_SECONDARY + """;
-    flex: 0 0 auto;
 }
 .about-arch-group{
     margin-bottom: 14px;
@@ -160,24 +101,20 @@ def show():
     st.markdown(_ABOUT_CSS, unsafe_allow_html=True)
 
     _render_hero()
-    _spacer()
+    spacer()
     _render_overview()
-    _spacer()
+    spacer()
     _render_workflow()
-    _spacer()
+    spacer()
     _render_architecture()
-    _spacer()
+    spacer()
     _render_tech_stack()
-    _spacer()
+    spacer()
     _render_features()
-    _spacer()
+    spacer()
     _render_statistics()
-    _spacer()
+    spacer()
     _render_footer()
-
-
-def _spacer():
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------
@@ -203,10 +140,9 @@ def _render_hero():
 # ---------------------------------------------------------------
 
 def _render_overview():
-    with st.container(border=True, key="about_card_overview"):
+    with section("Project Overview"):
         st.markdown(
-            '<div class="chart-title">Project Overview</div>'
-            '<div class="summary-line" style="margin-top:8px;">'
+            '<div class="summary-line">'
             "Unplanned downtime is one of the most expensive problems on a factory floor - "
             "a machine that fails without warning stops production, not just itself. "
             "Predictive maintenance flips this around: instead of reacting after a "
@@ -238,22 +174,8 @@ def _render_workflow():
         ("⚠️", "Risk Score"),
         ("✅", "Maintenance Recommendation"),
     ]
-
-    with st.container(border=True, key="about_card_workflow"):
-        st.markdown('<div class="chart-title">How PredictWise Works</div>', unsafe_allow_html=True)
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-        parts = []
-        for i, (icon, label) in enumerate(steps):
-            parts.append(
-                f'<div class="about-workflow-step">'
-                f'<div class="about-workflow-icon">{icon}</div>'
-                f'<div class="about-workflow-label">{label}</div></div>'
-            )
-            if i < len(steps) - 1:
-                parts.append('<div class="about-workflow-arrow">→</div>')
-
-        st.markdown(f'<div class="about-workflow">{"".join(parts)}</div>', unsafe_allow_html=True)
+    with section("How PredictWise Works"):
+        workflow_strip(steps)
 
 
 # ---------------------------------------------------------------
@@ -263,7 +185,7 @@ def _render_workflow():
 def _render_architecture():
     groups = [
         ("dashboard/", ["Streamlit application (routing, theme, cached data access)"]),
-        ("dashboard/pages/", [
+        ("dashboard/views/", [
             "Dashboard", "AI Prediction", "Analytics", "Explainability",
             "Model Performance", "Settings", "About",
         ]),
@@ -275,15 +197,11 @@ def _render_architecture():
         ("data/", ["AI4I 2020 predictive maintenance dataset"]),
     ]
 
-    with st.container(border=True, key="about_card_architecture"):
-        st.markdown('<div class="chart-title">Project Architecture</div>', unsafe_allow_html=True)
-        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-
+    with section("Project Architecture"):
         html = ""
         for path, items in groups:
             items_html = "".join(f'<div class="about-arch-item">{item}</div>' for item in items)
             html += f'<div class="about-arch-group"><div class="about-arch-path">{path}</div>{items_html}</div>'
-
         st.markdown(html, unsafe_allow_html=True)
 
 
@@ -302,19 +220,9 @@ def _render_tech_stack():
         ("🧠", "SHAP", "Explains individual and global model predictions"),
         ("🌳", "Random Forest", "The predictive model itself"),
     ]
-
-    with st.container(border=True, key="about_card_tech"):
-        st.markdown('<div class="chart-title">Technology Stack</div>', unsafe_allow_html=True)
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-        cards = "".join(
-            f'<div class="about-tech-card">'
-            f'<div class="about-tech-icon">{icon}</div>'
-            f'<div class="about-tech-name">{name}</div>'
-            f'<div class="about-tech-desc">{desc}</div></div>'
-            for icon, name, desc in stack
-        )
-        st.markdown(f'<div class="about-grid">{cards}</div>', unsafe_allow_html=True)
+    with section("Technology Stack"):
+        cards = [grid_card(icon, name, desc) for icon, name, desc in stack]
+        card_grid(cards, columns=4)
 
 
 # ---------------------------------------------------------------
@@ -330,19 +238,9 @@ def _render_features():
         ("📉", "Model Performance", "Accuracy, precision/recall, ROC curve, confusion matrix, and feature importance."),
         ("⚙️", "Settings", "Session preferences, live model info, risk thresholds, and system status."),
     ]
-
-    with st.container(border=True, key="about_card_features"):
-        st.markdown('<div class="chart-title">Application Features</div>', unsafe_allow_html=True)
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-        cards = "".join(
-            f'<div class="about-feature-card">'
-            f'<div class="about-feature-icon">{icon}</div>'
-            f'<div class="about-feature-title">{title}</div>'
-            f'<div class="about-feature-desc">{desc}</div></div>'
-            for icon, title, desc in features
-        )
-        st.markdown(f'<div class="about-grid">{cards}</div>', unsafe_allow_html=True)
+    with section("Application Features"):
+        cards = [grid_card(icon, title, desc) for icon, title, desc in features]
+        card_grid(cards, columns=4)
 
 
 # ---------------------------------------------------------------
@@ -389,9 +287,8 @@ def _render_statistics():
     n_categories = _count_prediction_categories()
     accuracy = _try_real_accuracy()
 
-    with st.container(border=True, key="about_card_stats"):
-        st.markdown('<div class="chart-title">Project Statistics</div>', unsafe_allow_html=True)
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    with section("Project Statistics"):
+        from dashboard.theme import HEALTHY, WARNING, CRITICAL
 
         c1, c2, c3, c4, c5 = st.columns(5)
         kpi_card(c1, "🏭", "Dataset Size", f"{len(df):,}", BLUE, "rgba(59,130,246,0.14)", "machines")
@@ -418,7 +315,7 @@ def _render_statistics():
 # ---------------------------------------------------------------
 
 def _render_footer():
-    with st.container(border=True, key="about_card_footer"):
+    with section("PredictWise"):
         st.markdown(
             '<div class="about-footer">'
             '<div class="about-footer-title">PredictWise</div>'

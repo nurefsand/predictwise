@@ -1,5 +1,5 @@
 """
-dashboard/pages/prediction.py
+dashboard/views/prediction.py
 
 AI Prediction page: score one machine via manual input, or a batch
 of machines via CSV upload. All ML logic is delegated to
