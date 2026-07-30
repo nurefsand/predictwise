@@ -260,6 +260,12 @@ section[data-testid="stSidebar"] div[role="radiogroup"] label {{
     animation: pulse 1.8s infinite;
 }}
 
+.live-dot-static{{
+    background: {TEXT_SECONDARY};
+    box-shadow: none;
+    animation: none;
+}}
+
 @keyframes pulse {{
     0% {{ opacity: 1; }}
     50% {{ opacity: 0.3; }}

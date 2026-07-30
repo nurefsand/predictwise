@@ -1,5 +1,5 @@
 """
-dashboard/views/dashboard.py
+dashboard/pages/dashboard.py
 
 The main fleet Dashboard page. No ML logic lives here - all scoring
 comes from dashboard.data.load_scored_fleet(), which itself only
@@ -21,13 +21,15 @@ from dashboard.theme import (
     STATUS_COLORS, badge_html, kpi_card, base_plotly_layout,
 )
 from dashboard.layout import section, spacer
-from dashboard.data import load_scored_fleet
+from dashboard.data import load_scored_fleet, load_live_fleet
 
 
 def show():
-    df = load_scored_fleet()
+    live_df = load_live_fleet()
+    is_live = not live_df.empty
+    df = live_df if is_live else load_scored_fleet()
 
-    _render_header()
+    _render_header(df, is_live)
     _render_ai_summary(df)
 
     spacer()
@@ -40,8 +42,16 @@ def show():
     _render_table(df)
 
 
-def _render_header():
+def _render_header(df: pd.DataFrame, is_live: bool):
     now_str = datetime.now().strftime("%d %b %Y, %H:%M")
+
+    if is_live:
+        status_label = "LIVE"
+        status_color_class = "live-dot"
+    else:
+        status_label = "SNAPSHOT (historical)"
+        status_color_class = "live-dot live-dot-static"
+
     st.markdown(f"""
 <div class="header-row">
     <div>
@@ -50,8 +60,8 @@ def _render_header():
     </div>
     <div class="header-right">
         <div class="info-pill">
-            <div class="info-pill-label">Dataset</div>
-            <div class="info-pill-value">10,000 units</div>
+            <div class="info-pill-label">Fleet</div>
+            <div class="info-pill-value">{len(df):,} units</div>
         </div>
         <div class="info-pill">
             <div class="info-pill-label">Model</div>
@@ -62,8 +72,8 @@ def _render_header():
             <div class="info-pill-value">98.7%</div>
         </div>
         <div class="live-indicator">
-            <div class="live-dot"></div>
-            LIVE · {now_str}
+            <div class="{status_color_class}"></div>
+            {status_label} · {now_str}
         </div>
     </div>
 </div>

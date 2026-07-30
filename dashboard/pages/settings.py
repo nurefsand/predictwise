@@ -1,5 +1,5 @@
 """
-dashboard/views/settings.py
+dashboard/pages/settings.py
 
 Session preferences, real model/dataset info, and system status.
 No mock charts, no invented metrics - every value here is either a
@@ -98,23 +98,21 @@ def _render_dashboard_preferences():
     with section("Dashboard Preferences"):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            st.session_state["pref_default_page"] = st.selectbox(
+            st.selectbox(
                 "Default landing page", PAGE_NAMES,
-                index=PAGE_NAMES.index(st.session_state["pref_default_page"]),
+                key="pref_default_page",
             )
         with c2:
-            st.session_state["pref_table_rows"] = st.number_input(
-                "Rows in tables", min_value=5, max_value=1000,
-                value=st.session_state["pref_table_rows"], step=5,
+            st.number_input(
+                "Rows in tables", min_value=5, max_value=1000, step=5,
+                key="pref_table_rows",
             )
         with c3:
-            st.session_state["pref_auto_refresh"] = st.toggle(
-                "Auto refresh", value=st.session_state["pref_auto_refresh"],
-            )
+            st.toggle("Auto refresh", key="pref_auto_refresh")
         with c4:
-            st.session_state["pref_refresh_interval"] = st.number_input(
-                "Refresh interval (s)", min_value=5, max_value=600,
-                value=st.session_state["pref_refresh_interval"], step=5,
+            st.number_input(
+                "Refresh interval (s)", min_value=5, max_value=600, step=5,
+                key="pref_refresh_interval",
                 disabled=not st.session_state["pref_auto_refresh"],
             )
 
@@ -218,21 +216,13 @@ def _render_export_settings():
         left, right = st.columns([2, 1])
 
         with left:
-            st.session_state["pref_export_recommendations"] = st.checkbox(
-                "Include recommendations", value=st.session_state["pref_export_recommendations"])
-            st.session_state["pref_export_confidence"] = st.checkbox(
-                "Include confidence score", value=st.session_state["pref_export_confidence"])
-            st.session_state["pref_export_health_score"] = st.checkbox(
-                "Include health score", value=st.session_state["pref_export_health_score"])
-            st.session_state["pref_export_risk_score"] = st.checkbox(
-                "Include risk score", value=st.session_state["pref_export_risk_score"])
+            st.checkbox("Include recommendations", key="pref_export_recommendations")
+            st.checkbox("Include confidence score", key="pref_export_confidence")
+            st.checkbox("Include health score", key="pref_export_health_score")
+            st.checkbox("Include risk score", key="pref_export_risk_score")
 
         with right:
-            st.session_state["pref_export_format"] = st.radio(
-                "Format",
-                ["CSV", "Excel"],
-                index=["CSV", "Excel"].index(st.session_state["pref_export_format"]),
-            )
+            st.radio("Format", ["CSV", "Excel"], key="pref_export_format")
 
 
 # ---------------------------------------------------------------
