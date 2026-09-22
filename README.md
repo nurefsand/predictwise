@@ -1,19 +1,10 @@
-<div align="center">
+<div align="left">
 
 # 🏭 PredictWise
 
 **AI destekli, gerçek zamanlı çalışan kestirimci bakım karar destek sistemi**
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)
-![scikit--learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikitlearn&logoColor=white)
-![SHAP](https://img.shields.io/badge/Explainability-SHAP-6E56CF?style=flat)
-![SQLite](https://img.shields.io/badge/SQLite-07405E?style=flat&logo=sqlite&logoColor=white)
-![Status](https://img.shields.io/badge/status-active--development-brightgreen?style=flat)
-
-</div>
-
----
+<img width="1412" height="666" alt="Ekran Resmi 2026-09-22 ÖS 3 20 09" src="https://github.com/user-attachments/assets/e62c7439-7077-40d7-806b-9d812e50b6d5" />
 
 ## 📌 Proje Hakkında
 
@@ -26,15 +17,9 @@ PredictWise, endüstriyel makinelerin sensör verilerinden (sıcaklık, devir h�
 
 üretir.
 
-Proje, statik bir veri setinin üzerine kurulu bir analiz aracı olmaktan çıkıp, **kendi ürettiği simüle edilmiş canlı sensör akışını** işleyen gerçek zamanlı bir sisteme dönüştürüldü — bkz. [Canlı Veri Mimarisi](#-canlı-veri-mimarisi).
+Proje, statik bir veri setinin üzerine kurulu bir analiz aracı olmaktan çıkıp, **kendi ürettiği simüle edilmiş canlı sensör akışını** işleyen gerçek zamanlı bir sisteme dönüştürüldü.
 
 > **Not:** Sistem gerçek fabrika sensörlerine değil, gerçekçi bir simülasyona bağlıdır. Mimari, gerçek sensör verisine geçişte sadece veri kaynağı katmanı değiştirilerek uyarlanabilecek şekilde tasarlandı.
-
----
-
-## 🖼️ Ekran Görüntüleri
-
-> _[Buraya Dashboard, Explainability ve Model Performance sayfalarından ekran görüntüsü eklenecek]_
 
 ---
 
@@ -165,15 +150,3 @@ predictwise/
 - [ ] Zaman boyutlu trend grafikleri (makine bazlı risk geçmişi)
 - [ ] Kritik durum bildirimleri
 - [ ] Docker ile tek komutla ayağa kalkan sistem
-
----
-
-## 👤 Geliştiren
-
-**Nurefşan** — Bilgisayar Mühendisliği & Endüstri Mühendisliği (Çift Anadal), KTO Karatay Üniversitesi
-
----
-
-## 📄 Lisans
-
-_[Lisans seçimi eklenecek — MIT önerilir]_
